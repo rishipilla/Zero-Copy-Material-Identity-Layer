@@ -1,322 +1,190 @@
-import { useState } from "react";
-import axios from "axios";
-import {
-  Upload,
-  Search,
-  Network,
-  Database,
-  GitMerge,
-  CheckCircle2,
-  AlertCircle,
-  FileText,
-} from "lucide-react";
+import { useEffect, useState } from 'react';
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, ChevronRight, CircleHelp, Database, Eye, EyeOff, FileUp, GitBranch, GitMerge, Layers3, LoaderCircle, LockKeyhole, LogOut, Network, RefreshCw, Search, ShieldCheck, Sparkles, Upload, X, XCircle, Zap } from 'lucide-react';
+import { api } from './api';
+import './App.css';
 
-import "./App.css";
-
-const API_BASE_URL = "http://127.0.0.1:8000";
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: Layers3 },
+  { id: 'materials', label: 'Materials', icon: Database },
+  { id: 'matches', label: 'Match review', icon: GitMerge },
+  { id: 'identities', label: 'Identities', icon: ShieldCheck },
+  { id: 'graph', label: 'Identity graph', icon: Network },
+  { id: 'integrations', label: 'ERP integrations', icon: GitBranch },
+  { id: 'analytics', label: 'Analytics', icon: Search },
+  { id: 'about', label: 'About', icon: CircleHelp },
+];
+const emptyAnalytics = { total_materials: 0, total_identities: 0, pending_candidates: 0, accepted_matches: 0, rejected_matches: 0, conflicts_flagged: 0, source_systems: {} };
+const DEMO_AUTH_KEY = 'zero-copy-demo-authenticated';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem(DEMO_AUTH_KEY) === 'true');
+  const [view, setView] = useState(window.location.hash.replace('#/', '') || 'dashboard');
+  const [analytics, setAnalytics] = useState(emptyAnalytics);
+  const [matches, setMatches] = useState([]);
+  const [accepted, setAccepted] = useState([]);
+  const [graph, setGraph] = useState({ nodes: [], edges: [] });
+  const [graphStatus, setGraphStatus] = useState(false);
+  const [integrations, setIntegrations] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [operation, setOperation] = useState('');
+  const [notice, setNotice] = useState({ type: 'info', text: 'Connect to the source layer to begin.' });
   const [selectedFile, setSelectedFile] = useState(null);
-  const [message, setMessage] = useState("");
-  const [status, setStatus] = useState("Ready");
-  const [isImporting, setIsImporting] = useState(false);
+  const [sourceSystem, setSourceSystem] = useState('CSV');
+  const [showCookie, setShowCookie] = useState(() => !localStorage.getItem('zc-cookie-choice'));
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [detail, setDetail] = useState(null);
 
-  const handleFileChange = (event) => {
-    const file = event.target.files?.[0];
+  useEffect(() => {
+    const handleHash = () => setView(window.location.hash.replace('#/', '') || 'dashboard');
+    window.addEventListener('hashchange', handleHash);
+    if (isAuthenticated) refreshData();
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, [isAuthenticated]);
+  useEffect(() => { document.title = `${navItems.find((item) => item.id === view)?.label || 'Dashboard'} | Zero-Copy Material Identity`; }, [view]);
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (view.startsWith('material/')) api.getMaterial(view.split('/')[1]).then(setDetail).catch(() => setDetail(null));
+    else if (view.startsWith('identity/')) api.getIdentity(view.split('/')[1]).then(setDetail).catch(() => setDetail(null));
+    else setDetail(null);
+  }, [isAuthenticated, view]);
 
-    if (!file) {
-      setSelectedFile(null);
-      return;
-    }
-
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setSelectedFile(null);
-      setStatus("Error");
-      setMessage("Please select a CSV file.");
-      return;
-    }
-
-    setSelectedFile(file);
-    setStatus("Ready");
-    setMessage(`Selected: ${file.name}`);
-  };
-
-  const importCSV = async () => {
-    if (!selectedFile) {
-      setStatus("Error");
-      setMessage("Please select a CSV file first.");
-      return;
-    }
-
+  async function refreshData() {
+    setLoading(true);
     try {
-      setIsImporting(true);
-      setStatus("Importing...");
-      setMessage("");
-
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/materials/import`,
-        formData,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        }
-      );
-
-      setStatus("Success");
-      setMessage(
-        `${response.data.imported_count} materials imported successfully.`
-      );
-    } catch (error) {
-      console.error(error);
-
-      setStatus("Error");
-
-      if (error.response?.data?.detail) {
-        setMessage(error.response.data.detail);
-      } else {
-        setMessage("Could not connect to the FastAPI backend.");
-      }
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const runMatching = async () => {
-    try {
-      setStatus("Running matching...");
-      setMessage("");
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/materials/match`
-      );
-
-      setMessage(
-        `Matching completed. ${response.data.matched_pairs} pairs evaluated.`
-      );
-
-      setStatus("Success");
-    } catch (error) {
-      console.error(error);
-
-      setMessage("Could not connect to the FastAPI backend.");
-      setStatus("Error");
-    }
-  };
-
-  const buildIdentities = async () => {
-    try {
-      setStatus("Building identities...");
-      setMessage("");
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/materials/identities`
-      );
-
-      setMessage(
-        `Identity build completed. ${response.data.identity_count} identities created.`
-      );
-
-      setStatus("Success");
-    } catch (error) {
-      console.error(error);
-
-      setMessage("Could not build identities.");
-      setStatus("Error");
-    }
-  };
-
-  const buildGraph = async () => {
-    try {
-      setStatus("Building graph...");
-      setMessage("");
-
-      const response = await axios.post(
-        `${API_BASE_URL}/api/materials/graph`
-      );
-
-      setMessage(
-        `Graph created. ${response.data.material_node_count} materials, ${response.data.identity_node_count} identities, ${response.data.membership_count} relationships.`
-      );
-
-      setStatus("Success");
-    } catch (error) {
-      console.error(error);
-
-      setMessage("Could not create the Neo4j graph.");
-      setStatus("Error");
-    }
-  };
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-icon">
-            <GitMerge size={24} />
-          </div>
-
-          <div>
-            <h1>Zero-Copy Material Identity</h1>
-            <p>Intelligent material deduplication platform</p>
-          </div>
-        </div>
-
-        <div className="system-status">
-          {status === "Success" ? (
-            <CheckCircle2 size={18} />
-          ) : status === "Error" ? (
-            <AlertCircle size={18} />
-          ) : (
-            <Database size={18} />
-          )}
-
-          <span>{status}</span>
-        </div>
-      </header>
-
-      <main className="dashboard">
-        <section className="hero">
-          <div>
-            <span className="eyebrow">MATERIAL INTELLIGENCE</span>
-
-            <h2>
-              One identity.
-              <br />
-              Many source records.
-            </h2>
-
-            <p>
-              Normalize, match, consolidate, and visualize material records
-              without modifying the original source data.
-            </p>
-          </div>
-        </section>
-
-        <section className="workflow">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">WORKFLOW</span>
-              <h3>Material identity pipeline</h3>
-            </div>
-          </div>
-
-          <div className="workflow-grid">
-            <div className="workflow-card">
-              <div className="card-icon">
-                <Upload size={22} />
-              </div>
-
-              <div className="card-number">01</div>
-
-              <h4>Import Materials</h4>
-
-              <p>
-                Load ERP and CSV material records into the source-preserving
-                PostgreSQL layer.
-              </p>
-
-              <label className="file-picker">
-                <FileText size={16} />
-
-                <span>
-                  {selectedFile ? selectedFile.name : "Choose CSV"}
-                </span>
-
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleFileChange}
-                />
-              </label>
-
-              <button
-                onClick={importCSV}
-                disabled={!selectedFile || isImporting}
-              >
-                {isImporting ? "Importing..." : "Import CSV"}
-              </button>
-            </div>
-
-            <div className="workflow-card">
-              <div className="card-icon">
-                <Search size={22} />
-              </div>
-
-              <div className="card-number">02</div>
-
-              <h4>Run Matching</h4>
-
-              <p>
-                Compare material descriptions using semantic, attribute, and
-                rule-based scoring.
-              </p>
-
-              <button onClick={runMatching}>
-                Run Matching
-              </button>
-            </div>
-
-            <div className="workflow-card">
-              <div className="card-icon">
-                <GitMerge size={22} />
-              </div>
-
-              <div className="card-number">03</div>
-
-              <h4>Build Identities</h4>
-
-              <p>
-                Group confirmed material matches into canonical material
-                identities.
-              </p>
-
-              <button onClick={buildIdentities}>
-                Build Identities
-              </button>
-            </div>
-
-            <div className="workflow-card">
-              <div className="card-icon">
-                <Network size={22} />
-              </div>
-
-              <div className="card-number">04</div>
-
-              <h4>Build Graph</h4>
-
-              <p>
-                Synchronize material identities and memberships into the Neo4j
-                graph.
-              </p>
-
-              <button onClick={buildGraph}>
-                Build Graph
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="status-panel">
-          <div className="status-title">
-            <Database size={20} />
-
-            <div>
-              <span className="eyebrow">SYSTEM OUTPUT</span>
-              <h3>Latest operation</h3>
-            </div>
-          </div>
-
-          <div className="status-message">
-            {message || "No operations have been executed yet."}
-          </div>
-        </section>
-      </main>
-    </div>
-  );
+      const [stats, pending, approved, graphData, status, integrationData, activityData] = await Promise.all([api.getAnalytics(), api.listMatches('pending'), api.listMatches('accepted'), api.getGraph(), api.graphStatus(), api.listIntegrations(), api.integrationActivity()]);
+      setAnalytics(stats || emptyAnalytics); setMatches(pending || []); setAccepted(approved || []); setGraph(graphData || { nodes: [], edges: [] }); setGraphStatus(Boolean(status?.neo4j_enabled));
+      setIntegrations(integrationData || []); setActivity(activityData || []);
+    } catch (error) { setNotice({ type: 'error', text: error.message || 'Backend unavailable. Start the API to load live data.' }); }
+    finally { setLoading(false); }
+  }
+  async function runDemo() {
+    setOperation('demo');
+    try { await api.resetAll(); await api.importSample(); await refreshData(); setNotice({ type: 'success', text: 'Demo dataset ready. Review the generated candidates below.' }); go('matches'); }
+    catch (error) { setNotice({ type: 'error', text: error.message || 'Demo could not be completed.' }); }
+    finally { setOperation(''); }
+  }
+  async function uploadCsv() {
+    if (!selectedFile) return setNotice({ type: 'warning', text: 'Choose a CSV file before importing.' });
+    setOperation('import');
+    try { const result = await api.importCsv(sourceSystem.trim() || 'CSV', selectedFile); await refreshData(); setNotice({ type: 'success', text: `${result.imported ?? 0} materials imported successfully.` }); setSelectedFile(null); }
+    catch (error) { setNotice({ type: 'error', text: error.message || 'Import failed. Check the CSV and try again.' }); }
+    finally { setOperation(''); }
+  }
+  async function resolveMatch(match, action) {
+    setOperation(`resolve-${match.id}`);
+    try { await api.resolveMatch(match.id, action); await refreshData(); setNotice({ type: action === 'accept' ? 'success' : 'info', text: action === 'accept' ? 'Match accepted and identity updated.' : 'Match rejected successfully.' }); }
+    catch (error) { setNotice({ type: 'error', text: error.message || 'Could not resolve this match.' }); }
+    finally { setOperation(''); }
+  }
+  async function syncIntegration(provider) {
+    setOperation(`sync-${provider}`);
+    try { const result = await api.syncIntegration(provider); await refreshData(); setNotice({ type: result.status === 'completed' ? 'success' : 'warning', text: result.message }); }
+    catch (error) { setNotice({ type: 'error', text: error.message || 'Unable to synchronize ERP. Existing identity data has not been changed.' }); }
+    finally { setOperation(''); }
+  }
+  async function testIntegration(provider) {
+    setOperation(`test-${provider}`);
+    try { const result = await api.testIntegration(provider); setIntegrations((current) => current.map((item) => item.provider === result.provider ? result : item)); setNotice({ type: result.status === 'connected' ? 'success' : 'warning', text: result.message }); }
+    catch (error) { setNotice({ type: 'error', text: error.message || 'Connection test failed.' }); }
+    finally { setOperation(''); }
+  }
+  function go(nextView) { window.location.hash = `/${nextView}`; setView(nextView); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function logout() {
+    sessionStorage.removeItem(DEMO_AUTH_KEY);
+    setIsAuthenticated(false);
+    setNotice({ type: 'info', text: '' });
+  }
+  const sourceCount = Object.keys(analytics.source_systems || {}).length;
+  if (!isAuthenticated) return <PasswordGate onAuthenticated={() => { sessionStorage.setItem(DEMO_AUTH_KEY, 'true'); setIsAuthenticated(true); }} />;
+  return <div className={`app-shell ${presentationMode ? 'presentation-mode' : ''}`}>
+    <aside className="sidebar"><button className="brand" onClick={() => go('dashboard')} aria-label="Go to dashboard"><span className="brand-mark"><GitMerge size={19} /></span><span><strong>Zero-Copy</strong><small>Material Identity</small></span></button><div className="sidebar-label">Workspace</div><nav className="main-nav" aria-label="Primary navigation">{navItems.map(({ id, label, icon: Icon }) => <button key={id} className={view === id ? 'nav-item active' : 'nav-item'} onClick={() => go(id)}><Icon size={17} /><span>{label}</span>{id === 'matches' && analytics.pending_candidates > 0 && <b>{analytics.pending_candidates}</b>}</button>)}</nav><div className="sidebar-bottom"><div className="sidebar-label">Environment</div><div className="environment"><span className="pulse" />Demo Mode<span className="env-tag">LOCAL</span></div><div className="source-proof"><Database size={14} /><span>PostgreSQL source of truth<br /><em>Neo4j graph projection</em></span></div><button className="logout-button" onClick={logout}><LogOut size={14} /> Lock / Logout</button></div></aside>
+    <main className="main-content"><header className="topbar"><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{navItems.find((item) => item.id === view)?.label || 'Dashboard'}</strong></div><div className="top-actions"><button className="presentation-toggle" onClick={() => setPresentationMode(!presentationMode)}><Sparkles size={15} /> {presentationMode ? 'Presentation on' : 'Presentation mode'}</button><span className="system-pill"><span className="status-dot" /> System operational</span></div></header><div className="notice-wrap"><div className={`notice ${notice.type}`}><NoticeIcon type={notice.type} /><span>{notice.text}</span><button onClick={() => setNotice({ type: 'info', text: '' })} aria-label="Dismiss notification"><X size={15} /></button></div></div>
+      {view === 'dashboard' && <Dashboard analytics={analytics} loading={loading} sourceCount={sourceCount} runDemo={runDemo} operation={operation} go={go} refreshData={refreshData} />}
+      {view === 'materials' && <Materials analytics={analytics} go={go} />}
+      {view === 'matches' && <Matches matches={matches} loading={loading} operation={operation} resolveMatch={resolveMatch} />}
+      {view === 'identities' && <Identities accepted={accepted} analytics={analytics} loading={loading} />}
+      {view === 'graph' && <Graph graph={graph} graphStatus={graphStatus} loading={loading} refreshData={refreshData} />}
+      {view === 'integrations' && <Integrations integrations={integrations} activity={activity} operation={operation} syncIntegration={syncIntegration} testIntegration={testIntegration} />}
+      {view === 'analytics' && <Analytics analytics={analytics} />}
+      {view.startsWith('material/') && <MaterialDetail material={detail} loading={!detail} />}
+      {view.startsWith('identity/') && <IdentityDetail identity={detail} loading={!detail} />}
+      {view === 'about' && <About />}
+      {view === 'privacy' && <LegalPage type="privacy" />}
+      {view === 'terms' && <LegalPage type="terms" />}
+      {view === 'thank-you' && <ThankYou go={go} />}
+      {!['dashboard', 'materials', 'matches', 'identities', 'graph', 'integrations', 'analytics', 'about', 'privacy', 'terms', 'thank-you'].includes(view) && !view.startsWith('material/') && !view.startsWith('identity/') && <NotFound go={go} />}
+      <section className="import-strip"><div><span className="section-kicker">SOURCE PRESERVATION</span><h3>Bring in another source system</h3><p>Import records as a side-car layer. Original ERP data is never modified.</p></div><div className="import-controls"><input value={sourceSystem} onChange={(event) => setSourceSystem(event.target.value)} aria-label="Source system" placeholder="Source system" /><label className="file-control"><FileUp size={16} />{selectedFile ? selectedFile.name : 'Choose CSV'}<input type="file" accept=".csv,text/csv" onChange={(event) => setSelectedFile(event.target.files?.[0] || null)} /></label><button className="button button-dark" onClick={uploadCsv} disabled={operation === 'import'}>{operation === 'import' ? <LoaderCircle className="spin" size={16} /> : <Upload size={16} />} Import</button></div></section>
+      <footer className="footer"><span>Zero-Copy Material Identity <b>v1.0 demo</b></span><span>Source ERP records are never modified.</span><span><a href="#/privacy">Privacy</a> · <a href="#/terms">Terms</a></span></footer>
+    </main><button className="mobile-demo button button-primary" onClick={runDemo} disabled={Boolean(operation)}><Zap size={16} /> Run Demo</button>{showCookie && <div className="cookie-banner"><div><strong>Privacy first.</strong><span>This demo stores only your interface preference locally.</span></div><div><button className="button button-ghost" onClick={() => { localStorage.setItem('zc-cookie-choice', 'declined'); setShowCookie(false); }}>Decline</button><button className="button button-primary" onClick={() => { localStorage.setItem('zc-cookie-choice', 'accepted'); setShowCookie(false); }}>Accept</button></div></div>}</div>;
 }
 
+function NoticeIcon({ type }) { return type === 'success' ? <CheckCircle2 size={16} /> : type === 'error' || type === 'warning' ? <AlertTriangle size={16} /> : <CircleHelp size={16} />; }
+function PasswordGate({ onAuthenticated }) {
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState('');
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!password) {
+      setError('Enter the access password to continue.');
+      setStatus('error');
+      return;
+    }
+    setStatus('loading');
+    setError('');
+    try {
+      const result = await api.demoLogin(password);
+      if (!result.authenticated) {
+        setError('Incorrect password. Please try again.');
+        setStatus('error');
+        setPassword('');
+        return;
+      }
+      setStatus('success');
+      window.setTimeout(onAuthenticated, 650);
+    } catch {
+      setError('Unable to verify access right now. Please try again.');
+      setStatus('error');
+    }
+  }
+
+  return <main className="password-gate"><div className="gate-grid" aria-hidden="true" /><div className="gate-orb gate-orb-one" aria-hidden="true" /><div className="gate-orb gate-orb-two" aria-hidden="true" /><div className="gate-flow gate-flow-one" aria-hidden="true" /><div className="gate-flow gate-flow-two" aria-hidden="true" /><section className="gate-panel" aria-labelledby="gate-title"><div className="gate-brand"><span className="gate-brand-mark"><GitMerge size={21} /></span><span><strong>Zero-Copy</strong><small>Material Identity</small></span></div><div className="gate-badge"><span className="gate-badge-dot" /> DEMO ENVIRONMENT</div><div className="gate-heading"><span className="section-kicker">MATERIAL INTELLIGENCE PLATFORM</span><h1 id="gate-title">Secure Demo<br /><em>Environment</em></h1><p>Enter the access password to continue to the material intelligence platform.</p></div><form className="gate-form" onSubmit={submit}><label htmlFor="demo-password">Access password</label><div className={`password-input ${status === 'error' ? 'has-error' : ''} ${status === 'success' ? 'is-success' : ''}`}><LockKeyhole size={17} aria-hidden="true" /><input id="demo-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => { setPassword(event.target.value); if (status === 'error') setStatus('idle'); }} placeholder="Enter password" autoComplete="current-password" autoFocus disabled={status === 'loading' || status === 'success'} aria-invalid={status === 'error'} aria-describedby={error ? 'gate-error' : undefined} /><button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'} disabled={status === 'loading' || status === 'success'}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>{error && <div className="gate-error" id="gate-error" role="alert"><AlertTriangle size={15} />{error}</div>}<button className="button gate-submit" type="submit" disabled={status === 'loading' || status === 'success'}>{status === 'loading' ? <><LoaderCircle className="spin" size={17} /> Verifying access...</> : status === 'success' ? <><Check className="gate-check" size={17} /> Access granted</> : <>Continue <ArrowRight size={16} /></>}</button></form><div className="gate-footnote"><ShieldCheck size={14} /><span>Read-only demo access · Source systems remain unchanged</span></div></section><div className="gate-architecture" aria-hidden="true"><span>ERP SOURCE</span><i /><span>IDENTITY LAYER</span><i /><span>GRAPH</span></div></main>;
+}
+function Dashboard({ analytics, loading, sourceCount, runDemo, operation, go, refreshData }) {
+  const kpis = [['Total materials', analytics.total_materials, Database, 'neutral'], ['Canonical identities', analytics.total_identities, ShieldCheck, 'teal'], ['Pending review', analytics.pending_candidates, Search, 'amber'], ['Accepted matches', analytics.accepted_matches, CheckCircle2, 'green'], ['Rejected matches', analytics.rejected_matches, XCircle, 'neutral'], ['Conflicts detected', analytics.conflicts_flagged, AlertTriangle, 'red']];
+  const steps = [['01', 'Import materials', 'Bring ERP records into the source-preserving layer.', FileUp], ['02', 'AI matching', 'Score semantic, attribute, and business signals.', Sparkles], ['03', 'Human validation', 'Review candidates before an identity is created.', ShieldCheck], ['04', 'Identity graph', 'Project accepted relationships into Neo4j.', Network]];
+  return <div className="page dashboard-page"><section className="hero"><div className="hero-copy"><span className="section-kicker">MATERIAL INTELLIGENCE <i>● LIVE DEMO</i></span><h1>One identity.<br /><span>Many source records.</span></h1><p>Resolve duplicate material records across ERP systems without modifying the original source data.</p><div className="hero-actions"><button className="button button-primary" onClick={runDemo} disabled={Boolean(operation)}>{operation === 'demo' ? <LoaderCircle className="spin" size={17} /> : <Zap size={17} />} {operation === 'demo' ? 'Running demo...' : 'Run Demo'}</button><button className="button button-secondary" onClick={() => go('about')}><GitBranch size={17} /> View architecture</button></div><div className="trust-line"><CheckCircle2 size={15} /> PostgreSQL source layer <span /> AI matching <span /> Human validation <span /> Neo4j graph</div></div><div className="hero-art"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="identity-node"><GitMerge size={24} /><span>Canonical<br />identity</span></div><div className="record record-one"><b>SAP</b><small>100001</small></div><div className="record record-two"><b>ORACLE</b><small>MT-7788</small></div><div className="record record-three"><b>SAP</b><small>100002</small></div><div className="connection c-one" /><div className="connection c-two" /><div className="connection c-three" /><div className="hero-caption">SIDE-CAR IDENTITY LAYER</div></div></section><section className="kpi-grid">{kpis.map(([label, value, Icon, tone]) => <div className={`kpi-card ${tone}`} key={label}><div className="kpi-icon"><Icon size={17} /></div><div className="kpi-value">{loading ? '—' : value ?? 0}</div><div className="kpi-label">{label}</div></div>)}</section><section className="section-block"><div className="section-heading"><div><span className="section-kicker">THE PIPELINE</span><h2>From source record to trusted identity</h2></div><button className="text-button" onClick={refreshData}><RefreshCw size={15} /> Refresh live data</button></div><div className="pipeline-grid">{steps.map(([number, title, text, Icon], index) => <div className="pipeline-card" key={number}><div className="pipeline-top"><span className="step-number">{number}</span><Icon size={19} /></div><h3>{title}</h3><p>{text}</p><span className="step-state">{loading ? 'Loading' : index === 0 && analytics.total_materials > 0 ? <><Check size={13} /> Complete</> : index === 1 && analytics.pending_candidates + analytics.accepted_matches > 0 ? <><Check size={13} /> Complete</> : index === 2 && analytics.pending_candidates > 0 ? <><span className="mini-dot" /> Needs review</> : index === 3 && analytics.total_identities > 0 ? <><Check size={13} /> Complete</> : 'Waiting'}</span></div>)}</div></section><section className="lower-grid"><div className="demo-panel"><div className="section-heading compact"><div><span className="section-kicker">SYNTHETIC DEMO DATA</span><h2>Judge-ready snapshot</h2></div><span className="live-label"><span className="status-dot" /> Live API</span></div><div className="snapshot-grid"><Snapshot value={analytics.total_materials} label="Materials" /><Snapshot value={sourceCount} label="Source systems" /><Snapshot value={analytics.total_identities} label="Identity" /><Snapshot value={analytics.accepted_matches} label="Accepted" /><Snapshot value={analytics.rejected_matches} label="Rejected" /><Snapshot value={analytics.conflicts_flagged} label="Conflict" /></div><button className="panel-link" onClick={() => go('matches')}>Open human validation queue <ArrowRight size={15} /></button></div><div className="principle-panel"><div className="principle-mark"><ShieldCheck size={22} /></div><span className="section-kicker">WHY ZERO-COPY</span><h2>Identity without disruption.</h2><p>Canonical intelligence lives beside your systems, preserving provenance and making every decision explainable.</p><div className="principle-list"><span><Check size={14} /> Source preserved</span><span><Check size={14} /> Side-car identity</span><span><Check size={14} /> Non-destructive</span></div></div></section></div>;
+}
+function Materials({ go }) { const [items, setItems] = useState(null); useEffect(() => { api.listMaterials().then(setItems).catch(() => setItems([])); }, []); return <div className="page"><PageIntro kicker="SOURCE RECORDS" title="Materials" text="Original ERP material records, preserved as read-only source data." count={`${items?.length || 0} records`} />{items === null ? <LoadingState label="Loading materials..." /> : items.length === 0 ? <EmptyState icon={Database} title="No materials imported" text="Run the demo or import a source dataset to populate the source layer." /> : <div className="material-table">{items.map((material) => <button className="material-table-row" key={material.id} onClick={() => go(`material/${material.id}`)}><span className={`source-badge ${material.source_system.toLowerCase()}`}>{material.source_system}</span><strong>{material.legacy_code}</strong><span>{material.description}</span><small>{material.category || 'Unclassified'} · {material.unit || '—'}</small><ArrowRight size={15} /></button>)}</div>}</div>; }
+function Analytics({ analytics }) { const cards = [['Materials', analytics.total_materials], ['Identities', analytics.total_identities], ['Pending candidates', analytics.pending_candidates], ['Accepted matches', analytics.accepted_matches], ['Rejected matches', analytics.rejected_matches], ['Conflicts', analytics.conflicts_flagged]]; return <div className="page"><PageIntro kicker="LIVE ANALYTICS" title="Analytics" text="Current counts from the PostgreSQL source layer and identity resolution engine." count="Live API" /><div className="analytics-grid">{cards.map(([label, value]) => <div className="analytics-card" key={label}><strong>{value ?? 0}</strong><span>{label}</span></div>)}</div><section className="source-breakdown"><span className="section-kicker">SOURCE SYSTEMS</span>{Object.entries(analytics.source_systems || {}).map(([source, count]) => <div className="breakdown-row" key={source}><span className={`source-badge ${source.toLowerCase()}`}>{source}</span><div><i style={{ width: `${analytics.total_materials ? count / analytics.total_materials * 100 : 0}%` }} /></div><strong>{count}</strong></div>)}</section></div>; }
+function MaterialDetail({ material, loading }) { if (loading) return <div className="page"><LoadingState label="Loading material..." /></div>; if (!material) return <div className="page"><EmptyState icon={Database} title="Material not found" text="The source record may no longer be available." /></div>; return <div className="page"><PageIntro kicker="SOURCE RECORD DETAIL" title={material.legacy_code} text="A source record and its derived identity information, kept explicitly separate." count={material.source_reference} /><div className="detail-grid"><article className="detail-panel source-detail"><span className="section-kicker">SOURCE DATA · READ-ONLY</span><div className="detail-title"><span className={`source-badge ${material.source_system.toLowerCase()}`}>{material.source_system}</span><h2>{material.legacy_code}</h2></div><label>Original source description</label><p className="original-description">{material.description}</p><div className="detail-fields"><span>Manufacturer<strong>{material.manufacturer || '—'}</strong></span><span>Category<strong>{material.category || '—'}</strong></span><span>Unit<strong>{material.unit || '—'}</strong></span><span>Ingested<strong>{material.ingested_at ? new Date(material.ingested_at).toLocaleString() : '—'}</strong></span></div>{material.source_changed && <div className="conflict-row"><AlertTriangle size={16} /><strong>Source record changed</strong><span>Previous: {material.previous_description}</span></div>}</article><article className="detail-panel derived-detail"><span className="section-kicker">DERIVED IDENTITY DATA</span><h2>Normalization & attributes</h2><label>Normalized description</label><p className="normalized-description">{material.normalized_description || 'Not yet normalized'}</p><div className="attribute-list">{(material.attributes || []).map((attribute) => <div key={attribute.attribute_name}><span>{attribute.attribute_name}</span><strong>{attribute.normalized_value || attribute.attribute_value}</strong></div>)}</div><div className="zero-copy-note"><ShieldCheck size={17} /> Source data is never overwritten.</div></article></div></div>; }
+function IdentityDetail({ identity, loading }) { if (loading) return <div className="page"><LoadingState label="Loading identity..." /></div>; if (!identity) return <div className="page"><EmptyState icon={ShieldCheck} title="Identity not found" text="The canonical identity may not exist in the current dataset." /></div>; return <div className="page"><PageIntro kicker="CANONICAL IDENTITY" title={identity.canonical_name} text="Multiple ERP source records mapped to one side-car identity." count={`${identity.members.length} source records → 1 identity`} /><div className="identity-detail-panel"><div className="identity-detail-header"><span className="identity-icon"><GitMerge size={20} /></span><span className="confidence-badge high">SIDE-CAR IDENTITY</span></div><div className="member-list">{identity.members.map((member) => <button className="member member-button" key={member.id} onClick={() => { window.location.hash = `/material/${member.id}`; }}><span className={`member-source source-badge ${member.source_system.toLowerCase()}`}>{member.source_system}</span><strong>{member.legacy_code}</strong><span>{member.description}</span><ArrowRight size={14} /></button>)}</div><div className="zero-copy-note"><ShieldCheck size={17} /> Source records remain unchanged.</div></div></div>; }
+function Snapshot({ value, label }) { return <div className="snapshot"><strong>{value ?? 0}</strong><span>{label}</span></div>; }
+function Matches({ matches, loading, operation, resolveMatch }) { return <div className="page"><PageIntro kicker="HUMAN VALIDATION" title="Review match candidates" text="The engine surfaces evidence. Your team makes the final call before records join a canonical identity." count={`${matches.length} pending`} /><div className="review-callout"><ShieldCheck size={18} /><span>Human-in-the-loop is active. No source record will be changed by accepting or rejecting a match.</span></div>{loading ? <LoadingState label="Loading candidates..." /> : matches.length === 0 ? <EmptyState icon={CheckCircle2} title="Review queue is clear" text="There are no pending candidates. Run the demo or import a new source dataset to generate matches." action="Run demo" onAction={() => window.location.hash = '/dashboard'} /> : <div className="match-list">{matches.map((match) => <MatchCard key={match.id} match={match} resolving={operation === `resolve-${match.id}`} resolveMatch={resolveMatch} />)}</div>}</div>; }
+function MatchCard({ match, resolving, resolveMatch }) { const score = Math.round((match.final_confidence || 0) * 100); const confidence = match.conflict_reason ? 'Conflict' : score >= 80 ? 'High confidence' : 'Medium confidence'; return <article className="match-card"><div className="match-card-header"><div><span className="match-id">MATCH {match.id}</span><h3>Candidate material pair</h3></div><span className={`confidence-badge ${match.conflict_reason ? 'conflict' : score >= 80 ? 'high' : 'medium'}`}>{confidence} · {score}%</span></div><div className="comparison"><MaterialBlock label="SOURCE A" material={match.material_a_detail} /><div className="match-link"><GitMerge size={20} /><span>Potential match</span></div><MaterialBlock label="SOURCE B" material={match.material_b_detail} /></div><div className="score-row"><Score label="Semantic" value={match.semantic_score} /><Score label="Attributes" value={match.attribute_score} /><Score label="Rules" value={match.rule_score} /><Score label="Final confidence" value={match.final_confidence} strong /></div>{match.conflict_reason && <div className="conflict-row"><AlertTriangle size={16} /><strong>Conflict detected</strong><span>{match.conflict_reason}</span></div>}<div className="match-actions"><button className="button button-ghost danger-text" disabled={resolving} onClick={() => resolveMatch(match, 'reject')}><XCircle size={16} /> Reject match</button><button className="button button-primary" disabled={resolving} onClick={() => resolveMatch(match, 'accept')}>{resolving ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />} {match.conflict_reason ? 'Accept anyway' : 'Accept match'}</button></div></article>; }
+function MaterialBlock({ label, material }) { return <div className="material-block"><span className="material-label">{label} · {material?.source_system || 'SOURCE'}</span><strong>{material?.legacy_code || 'Unknown record'}</strong><p>{material?.description || 'Material details unavailable'}</p></div>; }
+function Score({ label, value = 0, strong }) { return <div className={strong ? 'score strong' : 'score'}><span>{label}</span><div className="score-bar"><i style={{ width: `${Math.round(value * 100)}%` }} /></div><b>{Math.round(value * 100)}%</b></div>; }
+function Identities({ accepted, analytics, loading }) { const members = accepted.flatMap((match) => [match.material_a_detail, match.material_b_detail]).filter(Boolean); const uniqueMembers = Array.from(new Map(members.map((m) => [m.id, m])).values()); return <div className="page"><PageIntro kicker="CANONICAL LAYER" title="Canonical identities" text="A durable identity groups equivalent records while the original source rows remain untouched." count={`${analytics.total_identities} identity`} />{loading ? <LoadingState label="Loading identities..." /> : analytics.total_identities === 0 ? <EmptyState icon={ShieldCheck} title="No identities yet" text="Accept a valid candidate match to create the first canonical identity." /> : <div className="identity-layout"><article className="identity-card"><div className="identity-card-top"><span className="identity-icon"><GitMerge size={20} /></span><span className="confidence-badge high">VERIFIED</span></div><span className="section-kicker">CANONICAL IDENTITY</span><h2>Stainless steel hex bolt<br />M10 x 50 · DIN 933</h2><div className="identity-meta"><span>{analytics.total_identities} identity</span><span>→</span><span>{uniqueMembers.length || 3} source records</span></div><div className="member-list">{uniqueMembers.length ? uniqueMembers.map((member) => <div className="member" key={member.id}><span className="member-source">{member.source_system}</span><strong>{member.legacy_code}</strong><span>{member.description}</span></div>) : <div className="member"><span className="member-source">MATCHED</span><strong>Source members</strong></div>}</div></article><div className="explain-card"><ShieldCheck size={24} /><h3>Source records remain unchanged.</h3><p>Identity information is stored separately as a side-car layer. Trace every canonical decision back to its source material.</p><div className="explain-line"><Database size={16} /> Source ERP records <ArrowRight size={14} /> Canonical identity</div></div></div>}</div>; }
+function Graph({ graph, graphStatus, loading, refreshData }) { const identities = graph.nodes.filter((n) => n.type === 'identity'); const materials = graph.nodes.filter((n) => n.type !== 'identity'); return <div className="page"><PageIntro kicker="NEO4J PROJECTION" title="Identity graph" text="Explore relationships projected from accepted matches. The relational source of truth remains PostgreSQL." count={graphStatus ? 'Neo4j connected' : 'Relational view'} /><div className="graph-stat-row"><Stat label="Material nodes" value={graph.material_node_count} /><Stat label="Identity nodes" value={graph.identity_node_count} /><Stat label="Memberships" value={graph.membership_count} /><Stat label="Relationships" value={graph.edges.length} /></div>{loading ? <LoadingState label="Loading graph..." /> : graph.nodes.length === 0 ? <EmptyState icon={Network} title="No graph data yet" text="Accept a match to project its relationship into the identity graph." /> : <div className="graph-panel"><div className="graph-canvas"><div className="graph-core"><GitMerge size={22} /><strong>{identities[0]?.label || 'Canonical identity'}</strong><small>IDENTITY</small></div>{materials.slice(0, 8).map((node, index) => <div key={node.id} className={`graph-node node-${index % 4}`}><span className="node-connector" /><b>{node.source_system || 'ERP'}</b><strong>{node.label}</strong><small>MATERIAL RECORD</small></div>)}</div><div className="graph-footer"><span><i className="legend-dot identity-dot" /> Canonical identity</span><span><i className="legend-dot material-dot" /> ERP material</span><span><i className="legend-line" /> Accepted relationship</span><button className="text-button" onClick={refreshData}><RefreshCw size={14} /> Refresh</button></div></div>}</div>; }
+function Stat({ label, value }) { return <div className="stat"><span>{label}</span><strong>{value ?? 0}</strong></div>; }
+function About() { const architecture = [['ERP / CSV', FileUp], ['Ingestion API', Upload], ['PostgreSQL', Database], ['Normalize + extract', Sparkles], ['Hybrid matching', Search], ['Human validation', ShieldCheck], ['Canonical identity', GitMerge], ['Neo4j graph', Network]]; return <div className="page"><PageIntro kicker="SYSTEM ARCHITECTURE" title="Trust the layer, preserve the source." text="Zero-Copy Material Identity turns fragmented ERP records into an explainable identity graph without asking your operational systems to change." /><div className="architecture">{architecture.map(([label, Icon], index) => <div className="architecture-step" key={label}><div className="architecture-icon"><Icon size={18} /></div><strong>{label}</strong>{index < architecture.length - 1 && <ArrowRight size={15} />}</div>)}</div><div className="principles-grid"><Principle icon={Database} title="PostgreSQL = source of truth" text="Imported records and review decisions remain traceable in the relational layer." /><Principle icon={Network} title="Neo4j = graph projection" text="Accepted relationships are projected for discovery and network analysis." /><Principle icon={ShieldCheck} title="Source ERP records are never modified" text="Normalization and identity resolution operate as a non-destructive side-car." /></div><section className="about-note"><span className="section-kicker">DEMO ENVIRONMENT</span><h2>Built for a clear live walkthrough.</h2><p>This synthetic dataset demonstrates SAP and ORACLE material records, hybrid scoring, human review, canonical identity creation, and graph projection.</p></section></div>; }
+function Integrations({ integrations, activity, operation, syncIntegration, testIntegration }) { return <div className="page integrations-page"><PageIntro kicker="READ-ONLY ERP ACCESS" title="ERP integrations" text="Connect enterprise source systems without modifying their original material data." count="Production connectors" /><div className="read-only-banner"><ShieldCheck size={18} /><div><strong>ERP remains the source of truth.</strong><span>Zero-Copy Identity Layer reads and enriches source records. It never writes back to SAP, Oracle, or any ERP.</span></div></div><div className="integration-grid">{integrations.map((connection) => <IntegrationCard key={connection.provider} connection={connection} operation={operation} onSync={syncIntegration} onTest={testIntegration} />)}<div className="integration-card csv-card"><div className="integration-card-head"><span className="source-badge csv">CSV</span><span className="status-chip available">Available</span></div><h2>CSV / File import</h2><p>Use the existing synthetic demo datasets or import a source export from any ERP.</p><div className="integration-meta"><span>Connection type</span><strong>File import</strong><span>Access mode</span><strong>Read-only</strong></div><button className="button button-secondary" onClick={() => { window.location.hash = '/dashboard'; }}>Import dataset <ArrowRight size={15} /></button></div></div><section className="sync-layout"><div className="sync-panel"><div className="section-heading compact"><div><span className="section-kicker">SYNC STATUS</span><h2>Incremental synchronization</h2></div><span className="live-label"><span className="status-dot" /> Backend state</span></div>{integrations.map((item) => <div className="sync-row" key={item.provider}><span className="source-badge">{item.provider}</span><div><strong>{item.last_sync_at ? new Date(item.last_sync_at).toLocaleString() : 'No synchronization yet'}</strong><small>{item.last_sync_message || 'Waiting for configured credentials.'}</small></div><span className={`sync-status ${item.last_sync_status || item.status}`}>{item.last_sync_status || item.status}</span></div>)}</div><div className="activity-panel"><div className="section-heading compact"><div><span className="section-kicker">RECENT ACTIVITY</span><h2>Audit trail</h2></div></div>{activity.length === 0 ? <EmptyState icon={RefreshCw} title="No ERP activity yet" text="Completed syncs and source changes will appear here." /> : activity.slice(0, 5).map((event) => <div className="activity-row" key={event.id}><span className={`activity-icon ${event.status}`}><Check size={13} /></span><div><strong>{event.message}</strong><small>{event.provider || 'SYSTEM'} · {new Date(event.created_at).toLocaleString()}</small></div></div>)}</div></section><section className="guide-panel"><span className="section-kicker">ERP INTEGRATION GUIDE</span><h2>Configure production access safely.</h2><p>Set provider endpoints, OAuth client credentials, and field mappings on the FastAPI backend environment. Secrets are never sent to React, stored in PostgreSQL, or written to logs.</p><div className="guide-points"><span><Check size={14} /> OAuth 2.0 client credentials</span><span><Check size={14} /> Incremental updated_since polling</span><span><Check size={14} /> Provider-specific field mapping</span><span><Check size={14} /> Human validation remains active</span></div></section></div>; }
+function IntegrationCard({ connection, operation, onSync, onTest }) {
+  const provider = connection.provider.toLowerCase();
+  const label = connection.provider === 'ORACLE' ? 'Oracle ERP' : connection.provider;
+  const statusText = connection.status === 'connected' ? 'Connected' : connection.status === 'missing_credentials' ? 'Credentials missing' : connection.configured ? 'Not connected' : 'Not configured';
+  return <div className="integration-card"><div className="integration-card-head"><span className={`source-badge ${provider}`}>{connection.provider}</span><span className={`status-chip ${connection.status}`}>{statusText}</span></div><h2>{label}</h2><p>{connection.message}</p><div className="integration-meta"><span>Connection type</span><strong>REST / OAuth 2.0</strong><span>Endpoint</span><strong>{connection.base_url || 'Not configured'}</strong><span>Access mode</span><strong className="read-only-text">READ-ONLY ERP ACCESS</strong></div><div className="card-actions"><button className="button button-secondary" onClick={() => onTest(provider)} disabled={operation === `test-${provider}`}>{operation === `test-${provider}` ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />} Test connection</button><button className="button button-primary" onClick={() => onSync(provider)} disabled={operation === `sync-${provider}`}><RefreshCw size={15} /> {operation === `sync-${provider}` ? 'Syncing...' : 'Sync now'}</button></div></div>;
+}
+function LegalPage({ type }) { const privacy = type === 'privacy'; const sections = privacy ? ['Information we collect', 'How information is used', 'Data storage', 'Third-party services', 'Cookies', 'Security', 'Contact', 'Changes to this policy'] : ['Acceptance of terms', 'Use of service', 'Demo environment', 'Intellectual property', 'Availability', 'Limitation of liability', 'Changes', 'Contact']; return <div className="page"><PageIntro kicker={privacy ? 'PRIVACY' : 'TERMS'} title={privacy ? 'Privacy policy' : 'Terms of use'} text={privacy ? 'A concise overview of how this hackathon demonstration handles information.' : 'The conditions for using this hackathon and demo application.'} /><article className="legal-card">{sections.map((section) => <section key={section}><h2>{section}</h2><p>{privacy ? privacyCopy(section) : termsCopy(section)}</p></section>)}</article></div>; }
+function privacyCopy(section) { const copy = { 'Information we collect': 'This demo may receive material records that you choose to import. Do not upload confidential production data.', 'How information is used': 'Imported records are used only to demonstrate normalization, matching, human validation, and identity graph workflows.', 'Data storage': 'Demo data is stored in the configured local application databases and can be cleared with the reset workflow.', 'Third-party services': 'The application may connect to the configured PostgreSQL and Neo4j services. No other service is implied by this demo.', Cookies: 'A local preference records whether this interface cookie notice was accepted or declined.', Security: 'This is a hackathon demonstration. Configure production security, access controls, and retention policies before deployment.', Contact: 'Contact address: Configure before production.', 'Changes to this policy': 'This notice may change as the demonstration evolves. Check this page for the current version.' }; return copy[section]; }
+function termsCopy(section) { const copy = { 'Acceptance of terms': 'By using this demonstration, you agree to use it responsibly and only with data you are authorized to process.', 'Use of service': 'Use the application to evaluate material identity concepts and the included synthetic dataset.', 'Demo environment': 'This is a hackathon/demo application, not a production service. Sample records are synthetic.', 'Intellectual property': 'Application code and configured assets remain with their respective owners. Do not treat demo output as a production data model.', Availability: 'Features may be changed, interrupted, or removed while the demonstration is developed.', 'Limitation of liability': 'The application is provided for evaluation without warranties. Do not rely on it for operational, purchasing, safety, or compliance decisions.', Changes: 'These terms may be updated as the demo evolves.', Contact: 'Contact address: Configure before production.' }; return copy[section]; }
+function NotFound({ go }) { return <div className="page not-found"><span className="section-kicker">404 · NOT FOUND</span><h1>Page not found</h1><p>The material identity you are looking for does not exist.</p><button className="button button-primary" onClick={() => go('dashboard')}>Return to dashboard <ArrowRight size={15} /></button></div>; }
+function ThankYou({ go }) { return <div className="page not-found"><span className="section-kicker">MESSAGE RECEIVED</span><h1>Thanks for reaching out.</h1><p>Our team will get back to you shortly.</p><button className="button button-primary" onClick={() => go('dashboard')}>Return to dashboard <ArrowRight size={15} /></button></div>; }
+function Principle({ icon: Icon, title, text }) { return <div className="principle"><Icon size={20} /><h3>{title}</h3><p>{text}</p></div>; }
+function PageIntro({ kicker, title, text, count }) { return <div className="page-intro"><div><span className="section-kicker">{kicker}</span><h1>{title}</h1><p>{text}</p></div>{count && <span className="page-count">{count}</span>}</div>; }
+function LoadingState({ label }) { return <div className="empty-state"><LoaderCircle className="spin" size={25} /><strong>{label}</strong></div>; }
+function EmptyState({ icon: Icon, title, text, action, onAction }) { return <div className="empty-state"><span className="empty-icon"><Icon size={24} /></span><strong>{title}</strong><p>{text}</p>{action && <button className="button button-primary" onClick={onAction}>{action} <ArrowRight size={15} /></button>}</div>; }
 export default App;
