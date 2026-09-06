@@ -1,0 +1,6 @@
+source_system,legacy_code,description,manufacturer,category,unit,specifications
+SAP,100001,"SS hex bolt M10 x 50 mm DIN 933",ABC Fasteners,Fastener,EA,"{""material"":""stainless steel""}"
+SAP,100002,"Stainless Steel Hex Bolt 10mm x 50mm DIN933",ABC Fasteners,Fastener,EA,"{""material"":""stainless steel""}"
+ORACLE,MT-7788,"M10-50 SS HEX BOLT DIN 933",XYZ Industrial,Fastener,EA,"{""material"":""stainless steel""}"
+SAP,100003,"SS hex bolt M10 x 80 mm DIN 933",ABC Fasteners,Fastener,EA,"{""material"":""stainless steel""}"
+ORACLE,MT-9911,"Steel washer M10 DIN 125",XYZ Industrial,Fastener,EA,"{""material"":""steel""}"
