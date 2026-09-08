@@ -539,7 +539,7 @@ Identity
 | Endpoint | Description |
 |---|---|
 | `POST /api/materials/import` | Uploads a CSV file (matching runs automatically as part of import) |
-| `POST /api/materials/import-sample` | Loads the three bundled synthetic ERP datasets (`SAP-A`, `SAP-B`, `LEGACY-ERP`) and demonstrates the committed three-way cross-source duplicate examples for fasteners, hydraulics, and welding materials |
+| `POST /api/materials/import-sample` | Loads the committed synthetic ERP sample datasets (`SAP-A`, `SAP-B`) from the repository’s CSV fixtures and generates cross-source review candidates from the active two-file dataset |
 | `GET /api/materials` | Lists imported material records |
 | `DELETE /api/materials/reset` | Clears the imported dataset (materials, attributes, matches, identities) |
 | `GET /api/matches` | Lists pairwise match candidates |

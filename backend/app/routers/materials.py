@@ -31,14 +31,13 @@ def import_materials(
 
 @router.post("/import-sample", response_model=list[schemas.ImportSummary])
 def import_sample_data(db: Session = Depends(get_db)):
-    """Loads the bundled synthetic ERP datasets to populate the pipeline
-    from the committed seed data without requiring an external CSV upload."""
+    """Loads the bundled synthetic ERP datasets that are actually present in
+    the committed repository seed data without requiring an external CSV upload."""
     results = []
 
     for fname, source in [
         ("erp_a_sap.csv", "SAP-A"),
         ("erp_b_sap.csv", "SAP-B"),
-        ("erp_c_legacy.csv", "LEGACY-ERP"),
     ]:
         path = os.path.join(SAMPLE_DIR, fname)
 

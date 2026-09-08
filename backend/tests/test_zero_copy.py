@@ -2,8 +2,8 @@ def test_import_sample_and_generate_candidates(client):
     resp = client.post("/api/materials/import-sample")
     assert resp.status_code == 200
     summaries = resp.json()
-    assert len(summaries) == 3
-    assert sum(s["imported"] for s in summaries) == 70  # 33 rows (ERP-A) + 34 rows (ERP-B) + 3 rows (Legacy)
+    assert len(summaries) == 2
+    assert sum(s["imported"] for s in summaries) == 17  # 8 rows (ERP-A) + 9 rows (ERP-B)
     assert sum(s["matches_generated"] for s in summaries) > 0
 
 

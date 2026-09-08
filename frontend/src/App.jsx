@@ -28,7 +28,7 @@ function App() {
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [operation, setOperation] = useState('');
-  const [notice, setNotice] = useState({ type: 'info', text: 'Connect to the source layer to begin.' });
+  const [notice, setNotice] = useState({ type: 'info', text: '' });
   const [selectedFile, setSelectedFile] = useState(null);
   const [sourceSystem, setSourceSystem] = useState('CSV');
   const [showCookie, setShowCookie] = useState(() => !localStorage.getItem('zc-cookie-choice'));
@@ -76,7 +76,7 @@ function App() {
       if (Number(result.imported ?? 0) > 0) {
         setNotice({ type: 'success', text: `${result.imported ?? 0} materials imported successfully.` });
       } else {
-        setNotice({ type: 'info', text: 'No new materials were imported.' });
+        setNotice({ type: 'info', text: '' });
       }
       setSelectedFile(null);
     }
