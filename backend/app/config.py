@@ -19,7 +19,7 @@ class Settings:
     NEO4J_USER: str = os.getenv("NEO4J_USER", "neo4j")
     NEO4J_PASSWORD: str = os.getenv("NEO4J_PASSWORD", "")
 
-    # --- Matching engine weights (prototype defaults — tune with validation data) ---
+    # --- Matching engine weights (production-tunable defaults) ---
     WEIGHT_SEMANTIC: float = float(os.getenv("WEIGHT_SEMANTIC", "0.5"))
     WEIGHT_ATTRIBUTE: float = float(os.getenv("WEIGHT_ATTRIBUTE", "0.3"))
     WEIGHT_RULE: float = float(os.getenv("WEIGHT_RULE", "0.2"))
@@ -39,10 +39,14 @@ class Settings:
     #             see app/services/matching.py::_embed_sentence_transformers
     EMBEDDING_BACKEND: str = os.getenv("EMBEDDING_BACKEND", "tfidf")
 
-    CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
-    DEMO_PASSWORD: str = os.getenv("DEMO_PASSWORD", "demo123")
+    CORS_ORIGINS: list[str] = [
+        origin.strip()
+        for origin in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+        if origin.strip()
+    ]
+    ACCESS_PASSWORD: str = os.getenv("ACCESS_PASSWORD", os.getenv("DEMO_PASSWORD", "demo123"))
 
-    # --- Read-only ERP connectors. Secrets stay in environment variables. ---
+    # --- Read-only ERP connector configuration. Secrets stay in environment variables. ---
     ERP_PROVIDER: str = os.getenv("ERP_PROVIDER", "")
     ERP_SYNC_INTERVAL_SECONDS: int = int(os.getenv("ERP_SYNC_INTERVAL_SECONDS", "300"))
     SAP_BASE_URL: str = os.getenv("SAP_BASE_URL", "")

@@ -87,9 +87,15 @@ export default function CandidatesView({ onResolved }) {
 }
 
 function CandidateRow({ match, expanded, onToggle, onAccept, onReject, resolving, showActions }) {
-  const pct = Math.round(match.final_confidence * 100);
+  const finalConfidence = toFiniteNumber(match.final_confidence);
+  const semanticScore = toFiniteNumber(match.semantic_score);
+  const attributeScore = toFiniteNumber(match.attribute_score);
+  const ruleScore = toFiniteNumber(match.rule_score);
   const isConflict = Boolean(match.conflict_reason);
   const barColor = isConflict ? 'var(--accent-danger)' : 'var(--accent-amber)';
+  const segmentColor = isConflict ? 'var(--accent-danger)' : 'var(--accent-teal)';
+  const confidencePct = finalConfidence === null ? null : finalConfidence * 100;
+  const decisionText = match.status === 'accepted' ? 'MATCH' : match.status === 'rejected' ? 'NO_MATCH' : 'REVIEW';
 
   return (
     <div style={styles.row}>
@@ -100,26 +106,43 @@ function CandidateRow({ match, expanded, onToggle, onAccept, onReject, resolving
           <CodeBadge material={match.material_b_detail} />
         </div>
 
-        <div style={styles.confidenceWrap}>
-          <div style={styles.confidenceTrack}>
-            <div style={{ ...styles.confidenceFill, width: `${pct}%`, background: barColor }} />
+        <div style={styles.rightPanel}>
+          <span style={{ ...styles.statusText, color: isConflict ? 'var(--accent-danger)' : 'var(--accent-teal)' }}>{decisionText}</span>
+          <div style={styles.confidenceWrap}>
+            <div style={styles.confidenceTrack}>
+              <div style={{ ...styles.confidenceFill, width: confidencePct === null ? '0%' : `${clampPercent(confidencePct)}%`, background: barColor }} />
+            </div>
+            <span style={{ ...styles.confidenceLabel, color: barColor }}>{confidencePct === null ? 'Not available' : `${formatPct(confidencePct)}%`}</span>
           </div>
-          <span style={{ ...styles.confidenceLabel, color: barColor }}>{pct}%</span>
         </div>
       </button>
 
-      {isConflict && <div style={styles.conflictBanner}>⚠ {match.conflict_reason}</div>}
+      {isConflict && <div style={styles.conflictBanner}>⚠ Conflict detected: {match.conflict_reason}</div>}
 
-      {expanded && (
-        <div style={styles.detail}>
-          <AttributeDiff a={match.material_a_detail} b={match.material_b_detail} />
-          <div style={styles.scoreBreakdown}>
-            <ScoreItem label="Semantic" value={match.semantic_score} />
-            <ScoreItem label="Attribute" value={match.attribute_score} />
-            <ScoreItem label="Rule" value={match.rule_score} />
+      <div style={styles.detail}>
+        <div style={styles.evidenceHeader}>
+          <span style={styles.evidenceTitle}>Evidence</span>
+          <span style={{ ...styles.evidenceChip, borderColor: segmentColor }}>{decisionText}</span>
+        </div>
+
+        <div style={styles.scoreBreakdown}>
+          <ScoreItem label="Semantic" value={semanticScore} />
+          <ScoreItem label="Attribute" value={attributeScore} />
+          <ScoreItem label="Rule" value={ruleScore} />
+          <div style={styles.scoreItem}>
+            <span style={styles.scoreLabel}>Final confidence</span>
+            <span style={{ ...styles.scoreValue, color: barColor }}>{confidencePct === null ? 'Not available' : `${formatPct(confidencePct)}%`}</span>
           </div>
         </div>
-      )}
+
+        <div style={styles.detailMeta}>
+          <span><b>Source A:</b> {match.material_a_detail?.source_system || 'Unknown'} / {match.material_a_detail?.legacy_code || '—'}</span>
+          <span><b>Source B:</b> {match.material_b_detail?.source_system || 'Unknown'} / {match.material_b_detail?.legacy_code || '—'}</span>
+          <span><b>Status:</b> {match.status || 'pending'}</span>
+        </div>
+
+        <AttributeDiff a={match.material_a_detail} b={match.material_b_detail} />
+      </div>
 
       {showActions && (
         <div style={styles.actions}>
@@ -133,6 +156,22 @@ function CandidateRow({ match, expanded, onToggle, onAccept, onReject, resolving
       )}
     </div>
   );
+}
+
+function toFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function clampPercent(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(value, 0), 100);
+}
+
+function formatPct(value) {
+  if (!Number.isFinite(value)) return 'Not available';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function CodeBadge({ material }) {
@@ -184,10 +223,11 @@ function AttributeDiff({ a, b }) {
 }
 
 function ScoreItem({ label, value }) {
+  const parsed = toFiniteNumber(value);
   return (
     <div style={styles.scoreItem}>
       <span style={styles.scoreLabel}>{label}</span>
-      <span style={styles.scoreValue}>{Math.round(value * 100)}%</span>
+      <span style={styles.scoreValue}>{parsed === null ? 'Not available' : `${formatPct(parsed * 100)}%`}</span>
     </div>
   );
 }
@@ -240,6 +280,8 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
+  rightPanel: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 160 },
+  statusText: { fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 800, letterSpacing: 0.6 },
   confidenceWrap: { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, width: 160 },
   confidenceTrack: {
     flex: 1,
@@ -249,15 +291,20 @@ const styles = {
     overflow: 'hidden',
   },
   confidenceFill: { height: '100%' },
-  confidenceLabel: { fontFamily: 'var(--font-mono)', fontSize: 12.5, width: 36, textAlign: 'right' },
+  confidenceLabel: { fontFamily: 'var(--font-mono)', fontSize: 12.5, width: 54, textAlign: 'right' },
   conflictBanner: {
     background: 'var(--accent-danger-dim)',
     color: 'var(--accent-danger)',
     fontSize: 12.5,
     padding: '7px 16px',
     borderTop: '1px solid var(--border-hairline)',
+    fontWeight: 700,
   },
   detail: { padding: '4px 16px 16px', borderTop: '1px solid var(--border-hairline)' },
+  evidenceHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 12 },
+  evidenceTitle: { color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, fontWeight: 700 },
+  evidenceChip: { border: '1px solid', borderRadius: 'var(--radius-sm)', padding: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: 11 },
+  detailMeta: { display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 12, color: 'var(--text-muted)', fontSize: 11.5 },
   diffTable: { width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 12.5 },
   diffHeadCell: {
     textAlign: 'left',

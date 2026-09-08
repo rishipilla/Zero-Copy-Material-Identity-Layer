@@ -2,7 +2,7 @@
 
 > Intelligent material deduplication and identity resolution across multiple enterprise source systems.
 
-## 🚀 Overview
+## Overview
 
 Enterprise organizations often maintain the same physical material across multiple systems such as SAP, Oracle, ERP databases, spreadsheets, and legacy applications.
 
@@ -44,7 +44,7 @@ Canonical Material Identity
 Graph Representation
 ```
 
-## 🎯 Problem Statement
+##  Problem Statement
 
 Large organizations frequently have duplicate material records across different source systems.
 
@@ -67,7 +67,7 @@ This causes:
 - Inconsistent reporting
 - Increased operational cost
 
-## 💡 Solution
+## Solution
 
 The Zero-Copy Material Identity Layer solves this by separating:
 
@@ -91,76 +91,114 @@ For example:
 
 This provides traceability while avoiding modification of the original source records.
 
-## 🏗️ Architecture
+##  Architecture
 
-```
-                   ┌──────────────────┐
-                   │    ERP / CSV      │
-                   │ SAP / Oracle etc  │
-                   └────────┬──────────┘
-                            │
-                            ▼
-                  ┌──────────────────┐
-                  │  Ingestion API   │
-                  │     FastAPI      │
-                  └────────┬─────────┘
-                           │
-                           ▼
-                  ┌──────────────────┐
-                  │ Raw Materials    │
-                  │   PostgreSQL     │
-                  └────────┬─────────┘
-                           │
-                           ▼
-                  ┌──────────────────┐
-                  │  Normalization   │
-                  │  + Attribute     │
-                  │    Extraction    │
-                  └────────┬─────────┘
-                           │
-                           ▼
-              ┌───────────────────────────┐
-              │      Matching Engine      │
-              │                           │
-              │ Semantic Similarity       │
-              │ Attribute Similarity      │
-              │ Rule-Based Validation     │
-              └─────────────┬─────────────┘
-                            │
-                            ▼
-                  ┌──────────────────┐
-                  │ Match Decision   │
-                  │                  │
-                  │ MATCH            │
-                  │ REVIEW           │
-                  │ NO_MATCH         │
-                  └────────┬─────────┘
-                           │
-                           ▼
-                  ┌──────────────────┐
-                  │ Canonical        │
-                  │ Identities       │
-                  │   PostgreSQL     │
-                  └────────┬─────────┘
-                           │
-                           ▼
-                  ┌──────────────────┐
-                  │     Neo4j        │
-                  │ Identity Graph   │
-                  └────────┬─────────┘
-                           ▲
-                           │
-                  ┌────────┴─────────┐
-                  │ React Dashboard  │
-                  │                  │
-                  │ Import           │
-                  │ Match            │
-                  │ Identity         │
-                  │ Graph            │
-                  └──────────────────┘
+The Zero-Copy Material Identity Layer keeps source ERP and CSV records as the read-only truth while deriving a canonical identity layer on top of them.
+
+```text
+                    ┌────────────────────────────────────────────┐
+                    │ ERP / CSV Sources                          │
+                    │ SAP / Oracle / sample CSV                  │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Material Ingestion                         │
+                    │ FastAPI / app/services/importer.py         │
+                    │ POST /api/materials/import                 │
+                    │ POST /api/materials/import-sample          │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Normalization + Attribute Extraction       │
+                    │ normalize.py + extract.py                  │
+                    │ Raw source descriptions stay unchanged     │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Hybrid Matching Engine                     │
+                    │ matching.py                                │
+                    │ semantic + attribute + rule signals       │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Match Decision                             │
+                    │ pending / accepted / rejected / conflict   │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Canonical Material Identity Layer          │
+                    │ PostgreSQL source-of-truth                 │
+                    │ Material + Identity + Match tables          │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ Neo4j Identity Graph                        │
+                    │ identity graph mirror for accepted records │
+                    └─────────────────┬────────────────────────────┘
+                                      │
+                                      ▼
+                    ┌────────────────────────────────────────────┐
+                    │ React Dashboard                             │
+                    │ Vite + React frontend                      │
+                    └────────────────────────────────────────────┘
 ```
 
-## 🧰 Technology Stack
+The flow is intentionally source-preserving: ERP and CSV records are imported into the FastAPI ingestion API, normalized and enriched with extracted attributes, then compared by the matching service before the match decision is recorded. Confirmed matches become material identities in PostgreSQL and are projected into the Neo4j identity graph for the React dashboard.
+
+The committed sample dataset ships three supported synthetic ERP source systems in the import path (`SAP-A`, `SAP-B`, and `LEGACY-ERP`). It includes a three-way duplicate example group for the stainless fastener bolt family, a hydraulic hose group, and a welding electrode group. The route intentionally imports the sample rows idempotently so the local workflow remains safe and source-preserving while showing cross-source three-way identity evidence.
+
+## 🚀 One-Command Local Startup
+
+A beginner-friendly Windows PowerShell launcher is included in this repository:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\demo.ps1
+```
+
+Prerequisites:
+
+- Docker Desktop / Docker Compose v2 available on `PATH`
+- Python backend environment available, or the repository system Python can start the backend
+- Node.js and npm available for the frontend
+
+What the command does:
+
+1. Checks for Docker and Docker Compose availability.
+2. Starts the existing PostgreSQL and Neo4j containers from [docker-compose.yml](docker-compose.yml).
+3. Waits for PostgreSQL and Neo4j ports to answer.
+4. Starts the FastAPI backend locally with the repository's existing `uvicorn app.main:app` command when port `8000` is not already occupied.
+5. Starts the Vite frontend locally with the repository's existing `npm run dev -- --host 127.0.0.1` command when port `5173` is not already occupied.
+6. Optionally calls the existing safe idempotent sample import endpoint `POST /api/materials/import-sample` unless `-SkipSampleImport` is supplied.
+
+The script prints the URLs that the evaluator should open:
+
+- Frontend: http://127.0.0.1:5173
+- Backend: http://127.0.0.1:8000
+- API docs: http://127.0.0.1:8000/docs
+- Neo4j browser: http://127.0.0.1:7474
+
+The local startup flow is intentionally non-destructive:
+
+- It does not reset the PostgreSQL database.
+- It does not delete existing materials, matches, identities, or graph data.
+- It does not automatically overwrite existing rows because the existing import route `import_csv` is set up to skip duplicates by `(source_system, legacy_code)`.
+- It only starts the documented compose services and optionally invokes the existing sample endpoint. If a process already owns the backend or frontend port, the launcher notices that and avoids launching a second copy.
+
+To stop the local workflow, close the backend and frontend terminal windows or stop the `uvicorn` and `npm` / `vite` processes in Task Manager.
+
+## 🔌 ERP Integration Status
+
+The repository includes an ERP integration surface in the backend router and service layer (`backend/app/routers/integrations.py`, `backend/app/services/erp_connectors.py`, and `backend/app/services/erp_sync.py`). Those files define a provider-aware connector abstraction for SAP and Oracle-style providers, plus an integration activity and sync status model that can report provider configuration and attempt a sync.
+
+The shipped default workflow is still CSV and sample-data driven through the material ingestion route (`POST /api/materials/import-sample` and `POST /api/materials/import`) described in the repository. The connector settings are read from environment variables (`SAP_*`, `ORACLE_*`) and are therefore integration-ready scaffolding, not a turnkey production SAP/Oracle deployment. The current repository is best understood as a configurable ERP-to-identity implementation in which future ERP feeds may be routed through the same normalization, extraction, matching, and identity graph pipeline without changing the identity-resolution logic.
+
+## Technology Stack
 
 **Frontend**
 - React
@@ -178,9 +216,8 @@ This provides traceability while avoiding modification of the original source re
 - PostgreSQL
 
 **AI / Matching**
-- Sentence Transformers (all-MiniLM-L6-v2)
-- Scikit-learn
-- Cosine similarity
+- Scikit-learn (TF-IDF character n-grams + cosine similarity — the active `EMBEDDING_BACKEND=tfidf` default, chosen to run fully offline)
+- Sentence Transformers is a documented, not-yet-wired swap-in for when model downloads are available (see `EMBEDDING_BACKEND` in `app/config.py`)
 
 **Graph**
 - Neo4j
@@ -191,53 +228,98 @@ This provides traceability while avoiding modification of the original source re
 - PostgreSQL Docker container
 - Neo4j Docker container
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-zero-copy-material-identity/
+Zero-Copy-Material-Identity-Layer/
 │
 ├── backend/
-│   │
 │   ├── app/
-│   │   ├── api/
-│   │   │   └── materials.py
+│   │   ├── main.py              # FastAPI entry point — wires up every active router
+│   │   ├── config.py            # Settings (DB URL, Neo4j, matching weights, ERP creds)
+│   │   ├── database.py          # SQLAlchemy engine / session / Base
+│   │   ├── models.py            # ORM models (Material, MaterialAttribute,
+│   │   │                        #   MaterialMatch, MaterialIdentity, ...)
+│   │   ├── schemas.py           # Pydantic request/response schemas
 │   │   │
-│   │   ├── db/
-│   │   │   └── database.py
+│   │   ├── routers/             # Active API routers (all imported by main.py)
+│   │   │   ├── materials.py     #   /api/materials — import, list, reset
+│   │   │   ├── matches.py       #   /api/matches — review + resolve match candidates
+│   │   │   ├── identities.py    #   /api/identities — canonical identity detail
+│   │   │   ├── graph.py         #   /api/graph, /api/analytics
+│   │   │   ├── integrations.py  #   /api/integrations — ERP connector status/sync
+│   │   │   └── auth.py          #   /api/auth — demo login
 │   │   │
-│   │   ├── models/
-│   │   │   ├── material.py
-│   │   │   ├── material_attribute.py
-│   │   │   ├── material_identity.py
-│   │   │   ├── material_identity_member.py
-│   │   │   └── material_match.py
-│   │   │
-│   │   ├── services/
-│   │   │   ├── ingestion.py
-│   │   │   ├── normalization.py
-│   │   │   ├── matching.py
-│   │   │   ├── matcher.py
-│   │   │   ├── identity.py
-│   │   │   └── graph.py
-│   │   │
-│   │   └── main.py
+│   │   └── services/            # Active business logic used by the routers above
+│   │       ├── importer.py      #   CSV ingestion + triggers match-candidate generation
+│   │       ├── normalize.py     #   Description normalization
+│   │       ├── extract.py       #   Attribute extraction from descriptions
+│   │       ├── matching.py      #   Semantic / attribute / rule scoring, hybrid confidence
+│   │       ├── identity.py      #   Canonical identity assembly
+│   │       ├── graph.py         #   In-memory graph view for the dashboard
+│   │       ├── neo4j_sync.py    #   Mirrors accepted matches into Neo4j
+│   │       ├── erp_connectors.py#   SAP / Oracle connector adapters
+│   │       └── erp_sync.py      #   Pulls records from a connector into materials
 │   │
-│   └── .venv/
+│   ├── sample_data/
+│   │   ├── erp_a_sap.csv        # Synthetic ERP-A dataset used by "Import Sample Data"
+│   │   └── erp_b_sap.csv        # Synthetic ERP-B dataset used by "Import Sample Data"
+│   │
+│   ├── tests/                   # Pytest suite (test_matching.py, test_normalize.py, ...)
+│   ├── Dockerfile
+│   └── requirements.txt
 │
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx
-│   │   └── App.css
+│   │   ├── App.jsx / main.jsx / api.js
+│   │   ├── components/          # TopBar, Sidebar
+│   │   └── views/                # ImportView, CandidatesView, GraphView, AnalyticsView
 │   ├── package.json
-│   └── package-lock.json
+│   └── Dockerfile
 │
 ├── data/
-│   └── materials.csv
+│   └── materials.csv            # Sample CSV used in the manual demo walkthrough
 │
+├── docs/
+│   └── ERP_INTEGRATION_GUIDE.md
+│
+├── docker-compose.yml            # postgres + neo4j + backend + frontend
 └── README.md
 ```
 
-## 🗄️ Database Design
+> A few top-level folders (`ai/`, `connectors/`, `database/`, `docker/`, `graph/`, and a root-level `tests/`) exist as empty placeholders (`.gitkeep` only) from early scaffolding and hold no active code — they're omitted from the tree above.
+
+##  Active Implementation
+
+The backend went through a duplicate-cleanup pass early in development, where the material ingestion and matching logic was rewritten. To avoid ambiguity for anyone reading the code:
+
+- **Entry point**: `backend/app/main.py` is the only application entry point. It creates the FastAPI app and registers every active router.
+- **Active routers**: the routers actually imported by `main.py` — `materials`, `matches`, `graph` (including its `analytics_router`), `integrations`, `identities`, and `auth`, all under `app/routers/`. Everything the API surface exposes comes from this set.
+- **Active ingestion pipeline**: CSV/ERP import is handled by `app/services/importer.py`, which normalizes descriptions (`normalize.py`), extracts attributes (`extract.py`), and then generates match candidates.
+- **Active matching pipeline**: match scoring is handled by `app/services/matching.py` — semantic similarity (TF-IDF character n-grams + cosine similarity via scikit-learn, the default `EMBEDDING_BACKEND=tfidf`), attribute similarity, conflict detection, and the weighted hybrid confidence score.
+- **Legacy/unused code**: earlier iterations of this pipeline (`app/api/materials.py`, `app/db/database.py`, `app/models/` per-file model package, and `app/services/ingestion.py`, `matcher.py`, `normalization.py`) still exist in the repository but are **not imported by `main.py` or by anything the active routers use** — they are not part of the runtime path and can be treated as dead code.
+
+**Canonical pipeline** (what actually runs when you import data through the dashboard):
+
+```
+Source Materials  (CSV upload / sample datasets / ERP connectors)
+        ↓
+Ingestion            (importer.py)
+        ↓
+Normalization / Attribute Extraction   (normalize.py, extract.py)
+        ↓
+Matching             (matching.py — semantic + attribute + rule scoring)
+        ↓
+Match Decision        (material_matches table — pending / MATCH / REVIEW / NO_MATCH)
+        ↓
+Canonical Identities   (identity.py, material_identities table)
+        ↓
+Neo4j Identity Graph   (neo4j_sync.py)
+        ↓
+React Dashboard        (frontend/src/views)
+```
+
+## Database Design
 
 The PostgreSQL database contains separate tables for source records, attributes, matches, and canonical identities.
 
@@ -265,13 +347,13 @@ Fields: `identity_id`, `material_id`
 
 This mapping is important for maintaining traceability between the canonical identity and the original source records.
 
-## 🧠 Matching Engine
+##  Matching Engine
 
 The matching engine combines three signals.
 
 **1. Semantic Similarity**
 
-Sentence Transformers generates embeddings for normalized material descriptions. Cosine similarity is used to determine semantic similarity.
+Normalized material descriptions are vectorized with a TF-IDF character n-gram model (scikit-learn) and compared with cosine similarity. This is the default `EMBEDDING_BACKEND=tfidf` — it ships with zero external model downloads and works fully offline. A Sentence Transformers backend is documented as a future swap-in once model-download access is available.
 
 **2. Attribute Similarity**
 
@@ -281,9 +363,9 @@ Important material attributes are compared: Material, Type, Diameter, Length, St
 
 Business rules prevent incorrect matches. For example, `M10 × 50` must not automatically match `M10 × 80` even if their descriptions are semantically very similar. Hard attribute conflicts can therefore force `NO_MATCH`.
 
-## 📊 Hybrid Confidence Formula
+##  Hybrid Confidence Formula
 
-The current prototype uses:
+The current scoring model uses:
 
 ```
 Final Confidence =
@@ -300,9 +382,9 @@ Decision thresholds:
 
 Hard attribute conflicts override the score and produce `NO_MATCH`.
 
-## 🧪 Current Demo Dataset
+## Current Dataset
 
-The included demo contains five material records:
+The included dataset contains five material records:
 
 | Source | Legacy Code | Description |
 |---|---|---|
@@ -330,7 +412,7 @@ The three identities represent:
 - **Identity 2** — SS Hex Bolt M10 × 80 DIN 933 → SAP 100003
 - **Identity 3** — Steel Washer M10 DIN 125 → ORACLE MT-9911
 
-## 🚀 Installation
+##  Installation
 
 ### Prerequisites
 
@@ -397,7 +479,7 @@ uvicorn app.main:app --reload
 
 - Backend: http://127.0.0.1:8000
 - API documentation: http://127.0.0.1:8000/docs
-- Health check: http://127.0.0.1:8000/health
+- Health check: http://127.0.0.1:8000/api/health
 
 ### 5. Start the Frontend
 
@@ -410,7 +492,7 @@ node_modules\.bin\vite.cmd --host 127.0.0.1
 
 Frontend: http://127.0.0.1:5173
 
-## 🎬 Hackathon Demo
+## 🎬 Presentation Workflow
 
 Use the following sequence during the presentation.
 
@@ -452,16 +534,23 @@ Identity
    └── HAS_MEMBER → Material
 ```
 
-## 🔍 API Endpoints
+##  API Endpoints
 
 | Endpoint | Description |
 |---|---|
-| `POST /api/materials/import` | Uploads a CSV file |
-| `POST /api/materials/match` | Runs pairwise material matching |
-| `POST /api/materials/identities` | Creates canonical material identities |
-| `POST /api/materials/graph` | Creates the Neo4j material identity graph |
+| `POST /api/materials/import` | Uploads a CSV file (matching runs automatically as part of import) |
+| `POST /api/materials/import-sample` | Loads the three bundled synthetic ERP datasets (`SAP-A`, `SAP-B`, `LEGACY-ERP`) and demonstrates the committed three-way cross-source duplicate examples for fasteners, hydraulics, and welding materials |
+| `GET /api/materials` | Lists imported material records |
+| `DELETE /api/materials/reset` | Clears the imported dataset (materials, attributes, matches, identities) |
+| `GET /api/matches` | Lists pairwise match candidates |
+| `POST /api/matches/{match_id}/resolve` | Accepts/rejects a match candidate |
+| `GET /api/identities/{identity_id}` | Canonical identity detail |
+| `GET /api/graph` | Neo4j-backed identity graph for the dashboard |
+| `GET /api/integrations` | ERP connector status |
+| `POST /api/auth/demo-login` | Password gate for the dashboard |
+| `GET /api/health` | Health check |
 
-## 🔐 Zero-Copy Principle
+##  Zero-Copy Principle
 
 The system does not overwrite the original material descriptions.
 
@@ -490,13 +579,13 @@ This preserves:
 
 The canonical identity is a derived layer, not a replacement for the source record.
 
-## 📈 Why This Approach Works
+## Why This Approach Works
 
 A pure semantic similarity system can make dangerous mistakes. For example, `SS Hex Bolt M10 × 50` and `SS Hex Bolt M10 × 80` are semantically very similar — but their lengths are different.
 
 Therefore the system combines AI semantic understanding + structured attribute comparison + business rules, producing safer material identity resolution than relying on embeddings alone.
 
-## 🏆 Hackathon Value Proposition
+## Value Proposition
 
 **Before:** SAP, Oracle, and CSV each contribute records independently → Duplicate material records
 
@@ -513,14 +602,14 @@ Key benefits:
 - Enterprise-ready architecture
 - Traceability
 
-## 🧑‍🤝‍🧑 Suggested Team Presentation
+## Suggested Stakeholder Narrative
 
-- **Member 1 — Problem**: Explain the duplicate material problem across ERP systems.
-- **Member 2 — Solution**: Explain the Zero-Copy Identity Layer.
-- **Member 3 — AI / Matching**: Explain semantic similarity + attribute matching + business rules.
-- **Member 4 — Architecture / Demo**: Show CSV → PostgreSQL → Matching → Identities → Neo4j → React Dashboard.
+- **Problem**: Explain the duplicate material problem across ERP systems.
+- **Solution**: Explain the Zero-Copy Identity Layer.
+- **AI / Matching**: Explain semantic similarity + attribute matching + business rules.
+- **Architecture**: Show CSV → PostgreSQL → Matching → Identities → Neo4j → React Dashboard.
 
-## 🎤 60-Second Demo Script
+## 🎤 60-Second Workflow Script
 
 > "Organizations often store the same physical material multiple times across SAP, Oracle, and legacy systems. The descriptions are different, but the underlying material is the same.
 >
@@ -532,11 +621,11 @@ Key benefits:
 >
 > The confirmed matches are grouped into canonical identities and then represented as a graph in Neo4j.
 >
-> In our demo, five source records result in ten comparisons and three canonical material identities.
+> In this workflow, five source records result in ten comparisons and three canonical material identities.
 >
 > Most importantly, the original source records remain untouched. We create an intelligent identity layer on top of them."
 
-## 🛠️ Future Enhancements
+## Future Enhancements
 
 - Human review workflow
 - Explainable match reasoning
@@ -552,7 +641,7 @@ Key benefits:
 - Production database migrations
 - Automated ingestion from ERP systems
 
-## 📌 Project Status
+##  Project Status
 
 | Component | Status |
 |---|---|
@@ -572,6 +661,6 @@ Key benefits:
 | GitHub repository | ✅ |
 | End-to-end demo | ✅ |
 
-## 📄 License
+## License
 
 This project was created as a hackathon prototype (Smart India Hackathon 2026, Problem Statement SIH26099).

@@ -4,7 +4,6 @@ __pycache__/
 *.pyc
 .env
 .env.*
-!.env.example
 .vscode/
 .idea/
 backend/zerocopy.db

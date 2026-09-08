@@ -14,7 +14,7 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  demoLogin: (password) => request('/api/auth/demo-login', {
+  login: (password) => request('/api/auth/login', {
     method: 'POST',
     body: JSON.stringify({ password }),
   }),

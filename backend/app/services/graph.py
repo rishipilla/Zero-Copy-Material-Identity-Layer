@@ -4,6 +4,7 @@ from neo4j import GraphDatabase
 from sqlalchemy.orm import Session
 
 from app import models
+from app.config import settings
 
 
 NEO4J_URI = os.getenv(
@@ -151,11 +152,11 @@ def build_graph(db: Session) -> dict:
     Neo4j is only the graph projection.
     """
 
-    # Verify Neo4j before starting.
-    verify_graph_connection()
+    neo4j_enabled = bool(settings.NEO4J_URI)
 
-    # Remove old Identity nodes and their relationships.
-    clear_identity_graph()
+    if neo4j_enabled:
+        verify_graph_connection()
+        clear_identity_graph()
 
     # Keep Material nodes that may already exist, but update them
     # from the current PostgreSQL source records.
@@ -165,14 +166,15 @@ def build_graph(db: Session) -> dict:
         .all()
     )
 
-    for material in materials:
-        create_material_node(
-            material_id=material.id,
-            description=material.description or "",
-            category=material.category,
-            source_system=material.source_system,
-            legacy_code=material.legacy_code,
-        )
+    if neo4j_enabled:
+        for material in materials:
+            create_material_node(
+                material_id=material.id,
+                description=material.description or "",
+                category=material.category,
+                source_system=material.source_system,
+                legacy_code=material.legacy_code,
+            )
 
     # Load identities from PostgreSQL.
     identities = (
@@ -186,12 +188,13 @@ def build_graph(db: Session) -> dict:
 
     # Create Identity nodes in Neo4j.
     for identity in identities:
-        create_identity_node(
-            identity_id=identity.id,
-            canonical_name=identity.canonical_name,
-            category=identity.category,
-            status=getattr(identity, "status", "active"),
-        )
+        if neo4j_enabled:
+            create_identity_node(
+                identity_id=identity.id,
+                canonical_name=identity.canonical_name,
+                category=identity.category,
+                status=getattr(identity, "status", "active"),
+            )
 
         nodes.append(
             {
@@ -245,11 +248,12 @@ def build_graph(db: Session) -> dict:
                 }
             )
 
-            create_identity_membership(
-                identity_id=match.identity_id,
-                material_id=material.id,
-                confidence=match.final_confidence,
-            )
+            if neo4j_enabled:
+                create_identity_membership(
+                    identity_id=match.identity_id,
+                    material_id=material.id,
+                    confidence=match.final_confidence,
+                )
 
             edges.append(
                 {

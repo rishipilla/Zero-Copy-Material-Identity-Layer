@@ -56,8 +56,8 @@ export default function ImportView({ onImported }) {
         <h1 style={styles.h1}>Bring in ERP records</h1>
         <p style={styles.lede}>
           Each source ERP's material list is read in as-is — nothing here rewrites or migrates
-          the original rows. Import the two bundled datasets to see the whole pipeline run, or
-          upload your own CSV per source system.
+          the original rows. Import the bundled reference datasets to see the whole pipeline run,
+          or upload your own CSV per source system.
         </p>
       </div>
 
@@ -65,14 +65,14 @@ export default function ImportView({ onImported }) {
         <section style={styles.panel}>
           <div style={styles.panelHead}>
             <span style={styles.panelKicker}>Fastest path</span>
-            <h2 style={styles.panelTitle}>Load the demo datasets</h2>
+            <h2 style={styles.panelTitle}>Load the seeded datasets</h2>
           </div>
           <p style={styles.panelBody}>
-            Two synthetic ERPs (SAP-A, SAP-B) with the same fasteners described differently —
-            including one deliberate spec conflict, so you can see the review queue catch it.
+            Synthetic ERP source datasets (SAP-A, SAP-B, LEGACY-ERP) describe the same material
+            families across systems, including a deliberate validation conflict for the review queue.
           </p>
           <button style={styles.primaryBtn} onClick={runSampleImport} disabled={busy}>
-            {busy ? 'Importing…' : 'Load sample ERP-A + ERP-B'}
+            {busy ? 'Importing…' : 'Load seeded ERP datasets'}
           </button>
         </section>
 

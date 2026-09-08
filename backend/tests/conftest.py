@@ -15,7 +15,7 @@ def client():
     engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    from app.database import Base, get_db
+    from app.database import Base, engine as app_engine, get_db
     from app import models  # noqa: F401 - registers tables on Base.metadata
     Base.metadata.create_all(bind=engine)
 
@@ -35,5 +35,6 @@ def client():
 
     app.dependency_overrides.clear()
     engine.dispose()
+    app_engine.dispose()
     os.close(db_fd)
     os.unlink(db_path)

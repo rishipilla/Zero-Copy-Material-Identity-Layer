@@ -8,16 +8,17 @@ from app.config import settings
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-class DemoLoginIn(BaseModel):
+class LoginIn(BaseModel):
     password: str
 
 
-class DemoLoginOut(BaseModel):
+class LoginOut(BaseModel):
     authenticated: bool
 
 
-@router.post("/demo-login", response_model=DemoLoginOut)
-def demo_login(payload: DemoLoginIn):
-    return DemoLoginOut(
-        authenticated=hmac.compare_digest(payload.password, settings.DEMO_PASSWORD)
+@router.post("/login", response_model=LoginOut)
+@router.post("/demo-login", response_model=LoginOut)
+def login(payload: LoginIn):
+    return LoginOut(
+        authenticated=hmac.compare_digest(payload.password, settings.ACCESS_PASSWORD)
     )
